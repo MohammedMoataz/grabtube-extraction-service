@@ -13,7 +13,6 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from ..models.domain import JobStatus
 from .job_manager import JobManager
 
 logger = logging.getLogger("grabtube")
