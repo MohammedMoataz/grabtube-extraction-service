@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Build / output
+dist/
+build/
+*.egg-info/
+
+# Transient downloads & work dirs (this service produces only transient artifacts)
+tmp/
+downloads/
+work/
+*.part
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
