@@ -1,8 +1,8 @@
 name: CI
 
-# Runs the quality gates the constitution requires (lint + tests) on every push/PR,
-# plus a Docker build to confirm the deploy artifact stays valid. This is the green
-# signal the GrabTube front-end relies on for contract compatibility.
+# Quality gates the constitution requires (lint + tests), plus a Docker build, a
+# boot/CORS/health smoke test, and (on main) publishing the image to GHCR. This is the
+# green signal the GrabTube front-end relies on for contract + integration compatibility.
 on:
   push:
     branches: [main]
@@ -41,15 +41,92 @@ jobs:
       - name: Test (pytest — contract + integration + unit, upstream faked)
         run: pytest
 
-  docker:
-    name: Docker build (deploy artifact)
+  smoke:
+    name: Docker build + boot/CORS/health smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image
+      - name: Build image (loaded into the local daemon)
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
+          load: true
           tags: grabtube-extractor:ci
+
+      - name: Run container
+        run: |
+          docker run -d --name gt -p 8080:8080 \
+            -e GT_CORS_ORIGINS="https://grabtube.example" \
+            grabtube-extractor:ci
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/health >/dev/null; then
+              echo "health OK"; curl -s http://localhost:8080/health; echo; exit 0
+            fi
+            sleep 1
+          done
+          echo "service did not become healthy"; docker logs gt; exit 1
+
+      - name: Assert CORS preflight for the allowed origin
+        run: |
+          hdrs=$(curl -s -D - -o /dev/null -X OPTIONS http://localhost:8080/resolve \
+            -H "Origin: https://grabtube.example" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: content-type")
+          echo "$hdrs"
+          echo "$hdrs" | grep -iq "access-control-allow-origin: https://grabtube.example" \
+            || { echo "MISSING expected CORS allow-origin header"; docker logs gt; exit 1; }
+
+      - name: Assert a NON-allowed origin is not granted CORS
+        run: |
+          hdrs=$(curl -s -D - -o /dev/null -X OPTIONS http://localhost:8080/resolve \
+            -H "Origin: https://evil.example" \
+            -H "Access-Control-Request-Method: POST")
+          echo "$hdrs"
+          if echo "$hdrs" | grep -iq "access-control-allow-origin"; then
+            echo "CORS unexpectedly granted to a non-listed origin"; exit 1
+          fi
+
+      - name: Tear down
+        if: always()
+        run: docker rm -f gt || true
+
+  publish:
+    name: Publish image to GHCR
+    runs-on: ubuntu-latest
+    needs: [test, smoke]
+    # Only publish from the canonical branch, never from PRs.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata (tags + labels, lowercased)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

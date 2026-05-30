@@ -1,0 +1,27 @@
+# Local development convenience: spin up the extraction service for the GrabTube
+# front-end to call. Single-instance, transient storage — same as production.
+#
+#   docker compose up --build
+#
+# The front-end then points PUBLIC_DOWNLOADER_API at http://localhost:8080.
+# Adjust GT_CORS_ORIGINS to match wherever your front-end dev server runs.
+
+services:
+  extractor:
+    build: .
+    image: grabtube-extractor:local
+    ports:
+      - "8080:8080"
+    environment:
+      # Comma-separated allow-list of front-end dev origins (Vite, CRA, etc.).
+      GT_CORS_ORIGINS: "http://localhost:5173,http://localhost:3000"
+      GT_MAX_CONCURRENCY: "4"
+      GT_RETENTION_MINUTES: "30"
+      GT_TMP_DIR: "/tmp/grabtube"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

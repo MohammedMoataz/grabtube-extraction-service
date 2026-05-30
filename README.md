@@ -19,7 +19,23 @@ spec, plan, and tasks, and [`quickstart.md`](specs/001-extraction-service/quicks
 pip install -e ".[dev]" && pytest          # run the test suite
 uvicorn grabtube_extractor.main:app        # run locally (set GT_CORS_ORIGINS)
 docker build -t grabtube-extractor .       # build the deployable image
+docker compose up --build                  # run for local front-end integration
 ```
+
+## Front-end integration
+
+CI (GitHub Actions) lints, runs the full test suite on Python 3.11/3.12, builds the image,
+smoke-tests `/health` + CORS, and publishes the image to GHCR on `main`:
+
+```bash
+docker pull ghcr.io/mohammedmoataz/grabtube-extraction-service:latest
+docker run -p 8080:8080 -e GT_CORS_ORIGINS="https://your-frontend.example" \
+  ghcr.io/mohammedmoataz/grabtube-extraction-service:latest
+```
+
+Point the front-end's `PUBLIC_DOWNLOADER_API` at the service URL, and set `GT_CORS_ORIGINS`
+to the front-end's exact origin(s). Serve the service over HTTPS (behind a TLS reverse proxy)
+so the browser doesn't block mixed content.
 
 | Artifact | Path |
 |----------|------|
