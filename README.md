@@ -10,8 +10,16 @@ ZIP, and streams the results back — exposing the contract the front-end alread
 
 ## Status
 
-Spec-driven (GitHub Spec Kit). Current phase: **specification complete** →
-[`specs/001-extraction-service/spec.md`](specs/001-extraction-service/spec.md).
+Spec-driven (GitHub Spec Kit). Current phase: **implemented & tested** — the service is built
+(Python 3.12 + FastAPI), the full `pytest` suite (contract + integration + unit) is green, and the
+Docker image builds. See [`specs/001-extraction-service/`](specs/001-extraction-service/) for the
+spec, plan, and tasks, and [`quickstart.md`](specs/001-extraction-service/quickstart.md) to run it.
+
+```bash
+pip install -e ".[dev]" && pytest          # run the test suite
+uvicorn grabtube_extractor.main:app        # run locally (set GT_CORS_ORIGINS)
+docker build -t grabtube-extractor .       # build the deployable image
+```
 
 | Artifact | Path |
 |----------|------|
@@ -31,7 +39,9 @@ Spec-driven (GitHub Spec Kit). Current phase: **specification complete** →
 
 ## Next steps (SDD flow)
 
-1. `/speckit-clarify` — confirm assumptions (retention window, concurrency caps, allowed origins).
+1. ✅ `/speckit-clarify` — assumptions confirmed (single-instance/local-disk state, 30-min retention,
+   concurrency pool of 4, per-IP rate limits, configurable CORS allow-list). See the spec's
+   `## Clarifications` section.
 2. `/speckit-plan` — choose the stack (e.g., yt-dlp + ffmpeg + an HTTP layer) and design.
 3. `/speckit-tasks` → `/speckit-implement`.
 

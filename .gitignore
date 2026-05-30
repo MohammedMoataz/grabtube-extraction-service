@@ -9,6 +9,7 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+.pytest_cache/
 
 # Transient downloads & work dirs (this service produces only transient artifacts)
 tmp/

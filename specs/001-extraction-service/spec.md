@@ -21,6 +21,16 @@ and streams the finished files back. It exposes the interface already defined in
 > website. It is intentionally NOT governed by the website's "Static-First, No Backend" constitution
 > and is expected to live in (or move to) its own repository with its own governance.
 
+## Clarifications
+
+### Session 2026-05-30
+
+- Q: Deployment & job-state model for this version? → A: Single instance; job state and result files held in-process / on local disk (no external store); scale vertically.
+- Q: Retention window for a completed result before deletion? → A: Keep 30 minutes after completion regardless of download, then delete (and delete sooner on explicit cleanup).
+- Q: How should concurrency be bounded? → A: Global pool of N concurrent media conversions (default 4); jobs beyond the pool wait in `queued`; playlist items are processed sequentially within their own job.
+- Q: Rate-limiting policy (scope + thresholds)? → A: Per client IP, configurable: job creation ~10/min, resolve ~30/min, status polling effectively unthrottled; exceeding returns `429`.
+- Q: How are allowed CORS origins determined? → A: Configurable allow-list of one or more explicit origins (operator config); requests from non-listed origins are not granted CORS.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Resolve a link into metadata and formats (Priority: P1)
@@ -194,22 +204,28 @@ canceled and stops consuming processing resources shortly after.
 - **FR-013**: On completion, the service MUST stream the result (MP4, MP3, or playlist ZIP) with a
   content type appropriate to the format and a download filename.
 - **FR-014**: The service MUST be callable from a browser-based client: it MUST permit cross-origin
-  requests from the configured site origin and MUST NOT require any client-embedded secret.
+  requests from a **configurable allow-list of one or more explicit origins** (operator-supplied),
+  MUST NOT grant CORS to non-listed origins, and MUST NOT require any client-embedded secret.
 - **FR-015**: The service MUST perform its own abuse protection, including request validation and
-  rate limiting, returning a clear rate-limit error when limits are exceeded.
+  **per-client-IP** rate limiting with configurable thresholds — by default approximately 10 job
+  creations/min and 30 resolutions/min per IP, with status polling effectively unthrottled — and MUST
+  return a clear rate-limit error (`429`) when limits are exceeded.
 - **FR-016**: The service MUST return clear, user-safe error responses (a stable code plus a
   human-readable message) for: invalid links, unavailable/private/region-blocked/deleted content,
   live/upcoming streams, DRM-protected content, and timeouts.
-- **FR-017**: The service MUST treat produced files as **transient**: results are retained only long
-  enough to be retrieved and are removed afterward per a defined retention policy; the service does
-  not maintain a library of downloaded content.
+- **FR-017**: The service MUST treat produced files as **transient**: a completed result is retained
+  for **30 minutes after completion** (regardless of whether it was downloaded) and then removed, and
+  MAY be removed sooner via explicit cleanup. The service does not maintain a library of downloaded
+  content.
 - **FR-018**: The service MUST NOT attempt to bypass DRM or other technical protection measures.
 - **FR-019**: The service MUST remain compatible with the HTTP contract defined in
   `specs/001-extraction-service/contracts/extraction-service.md` (request/response shapes, status
   semantics, and endpoints), so the existing front-end works against it without changes.
-- **FR-020**: The service MUST bound resource usage per job and overall (e.g., concurrency and
-  per-request limits) so that large playlists or high load degrade gracefully rather than exhausting
-  the host.
+- **FR-020**: The service MUST bound resource usage per job and overall so that large playlists or
+  high load degrade gracefully rather than exhausting the host. Specifically, it MUST limit
+  concurrent media conversions to a configurable global pool (**default 4**); jobs that exceed the
+  pool MUST wait in a `queued` state rather than being dropped or run immediately, and the items of a
+  playlist job MUST be processed sequentially within that job.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -242,8 +258,8 @@ canceled and stops consuming processing resources shortly after.
 - **SC-007**: Every defined failure case (invalid, unavailable, live, DRM, timeout, rate-limited,
   expired result) returns a stable error code and a human-readable message — no opaque or empty
   failures.
-- **SC-008**: Transient results are removed within the defined retention window in 100% of cases
-  (no indefinite accumulation of downloaded content).
+- **SC-008**: Transient results are removed within 30 minutes of completion in 100% of cases (no
+  indefinite accumulation of downloaded content).
 - **SC-009**: Under sustained load or a very large playlist, the service stays responsive to new
   resolution/status requests and never exhausts host resources to the point of crashing.
 - **SC-010**: The service passes a compatibility check against every endpoint and response shape in
@@ -251,6 +267,10 @@ canceled and stops consuming processing resources shortly after.
 
 ## Assumptions
 
+- **Single-instance deployment**: This version runs as a single self-hosted instance; job state and
+  produced result files are held in-process / on local disk with no external shared store or queue,
+  and the service scales vertically. The HTTP contract is unaffected, so a future horizontally
+  scaled deployment can be introduced without breaking consumers.
 - **Separate project & governance**: This service is a standalone backend, not part of the static
   website project, and will have its own repository and constitution. Documented here so planning
   does not inherit the website's Static-First constraints.
@@ -263,9 +283,9 @@ canceled and stops consuming processing resources shortly after.
   current (as upstream sources change) is an ongoing operational responsibility.
 - **Anti-bot / access**: The operator may need to supply network egress, and possibly cookies or
   proxying, so the service can access content reliably; specifics are an operational concern.
-- **Transient retention default**: Results are deleted promptly after retrieval, and in any case
-  within a short retention window (assumed on the order of tens of minutes) unless configured
-  otherwise. No long-term storage of content.
+- **Transient retention default**: A completed result is kept 30 minutes after completion and then
+  deleted (and may be deleted sooner via explicit cleanup), unless configured otherwise. No long-term
+  storage of content.
 - **Anonymous access, no accounts**: The service does not implement user accounts or authentication
   for end users; abuse protection is by rate limiting and validation, not login.
 - **MP3 / MP4 only**: Audio is delivered as MP3 and video as MP4 in this version; other formats are
