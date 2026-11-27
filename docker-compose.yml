@@ -18,6 +18,9 @@ services:
       GT_MAX_CONCURRENCY: "4"
       GT_RETENTION_MINUTES: "30"
       GT_TMP_DIR: "/tmp/grabtube"
+      # Rate-limit key: Cloudflare overwrites this header at its edge, so tunnel clients
+      # cannot fake it. Requests without it (direct :8080) use the peer address.
+      GT_CLIENT_IP_HEADER: "cf-connecting-ip"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health').status==200 else 1)"]
@@ -25,3 +28,13 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # Optional: share this service with friends over HTTPS via a Cloudflare quick tunnel.
+  #   docker compose --profile quick up -d --build
+  # The random https://*.trycloudflare.com address is printed in this service's log and
+  # changes on every restart of the tunnel. See README "Share with friends".
+  cloudflared-quick:
+    profiles: [quick]
+    image: cloudflare/cloudflared:2026.10.1
+    command: tunnel --no-autoupdate --url http://extractor:8080
+    depends_on: [extractor]

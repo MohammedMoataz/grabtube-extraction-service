@@ -44,6 +44,33 @@ so the browser doesn't block mixed content.
 | HTTP contract | [`specs/001-extraction-service/contracts/extraction-service.md`](specs/001-extraction-service/contracts/extraction-service.md) |
 | Quality checklist | [`specs/001-extraction-service/checklists/requirements.md`](specs/001-extraction-service/checklists/requirements.md) |
 
+## Share with friends (Cloudflare quick tunnel)
+
+The GrabTube browser extension can point at this service from anywhere. To share your
+running instance without a server or domain, start the optional quick tunnel:
+
+```powershell
+docker compose --profile quick up -d --build
+docker compose logs -f cloudflared-quick     # wait for the trycloudflare.com banner, then Ctrl+C
+```
+
+Or filter the log (it can take a few seconds to appear; rerun until it does):
+
+```powershell
+docker compose logs cloudflared-quick | Select-String trycloudflare.com    # PowerShell
+docker compose logs cloudflared-quick | grep trycloudflare.com             # bash/zsh
+```
+
+Take the **newest** `https://<random-words>.trycloudflare.com` line (ignore
+`api.trycloudflare.com`) and send it to your friends; they paste it into the extension's
+Settings. The address **changes every time the tunnel restarts**. Stop sharing (the service
+keeps running) with `docker compose stop cloudflared-quick`.
+
+No access key protects the service: anyone with the address can use it, within the per-IP
+rate limits. Share the link privately. Downloads run from your connection. Rate limits key on
+`CF-Connecting-IP` (`GT_CLIENT_IP_HEADER`), which Cloudflare sets and clients can't fake through
+the tunnel; a client that reaches port 8080 directly (your LAN) could still send it.
+
 ## What it does (from the spec)
 
 - **Resolve** a video/playlist link → metadata + available MP4 qualities (≤1080p) + audio availability.

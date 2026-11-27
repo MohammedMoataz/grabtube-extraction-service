@@ -38,3 +38,37 @@ async def test_resolve_returns_429_when_limited(tmp_path):
         assert second.status_code == 429
         assert second.json()["error"]["code"] == "rate_limited"
         assert "retry-after" in {k.lower() for k in second.headers}
+
+
+async def _resolve_twice(settings, headers1, headers2):
+    app = create_app(settings=settings, backend=FakeBackend())
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        body = {"url": "https://youtube.com/watch?v=abc"}
+        first = await c.post("/resolve", json=body, headers=headers1)
+        second = await c.post("/resolve", json=body, headers=headers2)
+    return first.status_code, second.status_code
+
+
+async def test_spoofed_x_forwarded_for_does_not_reset_the_limit(tmp_path):
+    settings = make_settings(tmp_path, rate_resolve_per_min=1)
+    codes = await _resolve_twice(
+        settings, {"X-Forwarded-For": "10.0.0.1"}, {"X-Forwarded-For": "10.0.0.2"}
+    )
+    assert codes == (200, 429)
+
+
+async def test_configured_client_ip_header_separates_clients(tmp_path):
+    settings = make_settings(tmp_path, rate_resolve_per_min=1, client_ip_header="cf-connecting-ip")
+    codes = await _resolve_twice(
+        settings, {"CF-Connecting-IP": "203.0.113.1"}, {"CF-Connecting-IP": "203.0.113.2"}
+    )
+    assert codes == (200, 200)
+
+
+async def test_configured_header_absent_falls_back_to_peer(tmp_path):
+    settings = make_settings(tmp_path, rate_resolve_per_min=1, client_ip_header="cf-connecting-ip")
+    codes = await _resolve_twice(
+        settings, {"X-Forwarded-For": "10.0.0.1"}, {"X-Forwarded-For": "10.0.0.2"}
+    )
+    assert codes == (200, 429)
