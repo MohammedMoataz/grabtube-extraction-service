@@ -22,6 +22,31 @@ logger = logging.getLogger("grabtube")
 MAX_HEIGHT = 1080
 
 
+def format_opts(fmt: Format, quality_id: str | None) -> dict:
+    """yt-dlp format + post-processing options for one item.
+
+    MP3 writes the source thumbnail, converts it to JPEG and embeds it as cover art
+    (FR-008); the later mutagen tagging step keeps that APIC frame.
+    """
+    if fmt is Format.mp4:
+        return {
+            "format": f"{quality_id}+bestaudio/best" if quality_id else f"bestvideo[height<={MAX_HEIGHT}]+bestaudio/best",
+            "merge_output_format": "mp4",
+            "writethumbnail": False,
+            "postprocessors": [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}],
+        }
+    return {
+        "format": "bestaudio/best",
+        "merge_output_format": None,
+        "writethumbnail": True,
+        "postprocessors": [
+            {"key": "FFmpegThumbnailsConvertor", "format": "jpg", "when": "before_dl"},
+            {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"},
+            {"key": "EmbedThumbnail"},
+        ],
+    }
+
+
 class YtDlpBackend(ExtractionBackend):
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -140,24 +165,13 @@ class YtDlpBackend(ExtractionBackend):
             elif d.get("status") == "finished":
                 on_progress(99)
 
-        if fmt is Format.mp4:
-            fmt_selector = f"{quality_id}+bestaudio/best" if quality_id else "bestvideo[height<=1080]+bestaudio/best"
-            postproc = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
-        else:
-            fmt_selector = "bestaudio/best"
-            postproc = [
-                {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"},
-            ]
-
         opts = self._ydl_opts(
             {
                 "skip_download": False,
                 "noplaylist": True,
                 "outtmpl": str(dest.with_suffix(".%(ext)s")),
-                "format": fmt_selector,
-                "merge_output_format": "mp4" if fmt is Format.mp4 else None,
-                "postprocessors": postproc,
                 "progress_hooks": [_hook],
+                **format_opts(fmt, quality_id),
             }
         )
 
