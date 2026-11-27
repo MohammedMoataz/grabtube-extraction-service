@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     port: int = 8080
     proxy_url: str = ""
     cookies_file: str = ""
+    # Header carrying the real client IP, set by a trusted proxy in front of the service
+    # (e.g. "cf-connecting-ip" behind a Cloudflare tunnel). Empty = use the direct peer address.
+    client_ip_header: str = ""
 
     @field_validator("cors_origins", mode="before")
     @classmethod

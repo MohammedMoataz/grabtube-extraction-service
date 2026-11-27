@@ -19,10 +19,13 @@ from ..errors import ServiceError
 WINDOW_S = 60.0
 
 
-def client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
+def client_ip(request: Request, trusted_header: str = "") -> str:
+    """Rate-limit key. Never taken from client-settable headers such as X-Forwarded-For;
+    only from ``trusted_header`` (one a trusted proxy overwrites) or the direct peer."""
+    if trusted_header:
+        value = request.headers.get(trusted_header, "").strip()
+        if value:
+            return value
     return request.client.host if request.client else "unknown"
 
 
@@ -53,6 +56,8 @@ def make_dependency(category: str):
     async def _dep(request: Request) -> None:
         limiter: RateLimiter | None = getattr(request.app.state, "rate_limiter", None)
         if limiter is not None:
-            limiter.check(client_ip(request), category)
+            settings = getattr(request.app.state, "settings", None)
+            header = settings.client_ip_header if settings is not None else ""
+            limiter.check(client_ip(request, header), category)
 
     return _dep
