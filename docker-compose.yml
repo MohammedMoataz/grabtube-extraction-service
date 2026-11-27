@@ -25,3 +25,13 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # Optional: share this service with friends over HTTPS via a Cloudflare quick tunnel.
+  #   docker compose --profile quick up -d --build
+  # The random https://*.trycloudflare.com address is printed in this service's log and
+  # changes on every restart of the tunnel. See README "Share with friends".
+  cloudflared-quick:
+    profiles: [quick]
+    image: cloudflare/cloudflared:2026.10.1
+    command: tunnel --no-autoupdate --url http://extractor:8080
+    depends_on: [extractor]

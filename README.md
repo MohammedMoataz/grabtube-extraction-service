@@ -44,6 +44,24 @@ so the browser doesn't block mixed content.
 | HTTP contract | [`specs/001-extraction-service/contracts/extraction-service.md`](specs/001-extraction-service/contracts/extraction-service.md) |
 | Quality checklist | [`specs/001-extraction-service/checklists/requirements.md`](specs/001-extraction-service/checklists/requirements.md) |
 
+## Share with friends (Cloudflare quick tunnel)
+
+The GrabTube browser extension can point at this service from anywhere. To share your
+running instance without a server or domain, start the optional quick tunnel:
+
+```powershell
+docker compose --profile quick up -d --build
+docker compose logs cloudflared-quick | Select-String trycloudflare.com
+```
+
+Take the **newest** `https://<random-words>.trycloudflare.com` line (ignore
+`api.trycloudflare.com`) and send it to your friends; they paste it into the extension's
+Settings. The address **changes every time the tunnel restarts**. Stop it with
+`docker compose --profile quick down`.
+
+No access key protects the service: anyone with the address can use it, within the per-IP
+rate limits. Share the link privately. Downloads run from your connection.
+
 ## What it does (from the spec)
 
 - **Resolve** a video/playlist link → metadata + available MP4 qualities (≤1080p) + audio availability.
