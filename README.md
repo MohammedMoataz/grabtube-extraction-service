@@ -71,7 +71,11 @@ rate limits. Share the link privately. Downloads run from your connection. Rate 
 `CF-Connecting-IP` (`GT_CLIENT_IP_HEADER`), which Cloudflare sets and clients can't fake through
 the tunnel. Compose publishes port 8080 on this machine only (`127.0.0.1`), so other devices
 can't reach the service around the tunnel. If you open it to your network by changing that to
-`"8080:8080"`, clear `GT_CLIENT_IP_HEADER`, or those devices can fake the header.
+`"8080:8080"`, clear `GT_CLIENT_IP_HEADER`, or those devices can fake the header. With it
+cleared, everyone coming through the tunnel shares one rate-limit allowance.
+
+Use Docker Engine 28.0.0 or newer: on older releases, hosts on the same network segment can
+still reach ports published to `127.0.0.1`.
 
 ## What it does (from the spec)
 
