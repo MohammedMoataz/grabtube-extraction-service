@@ -11,7 +11,9 @@ services:
     build: .
     image: grabtube-extractor:local
     ports:
-      - "8080:8080"
+      # This machine only. Friends come in through the tunnel; publishing on every
+      # interface would let LAN devices fake the rate-limit header below.
+      - "127.0.0.1:8080:8080"
     environment:
       # Comma-separated allow-list of front-end dev origins (Vite, CRA, etc.).
       GT_CORS_ORIGINS: "http://localhost:5173,http://localhost:3000"

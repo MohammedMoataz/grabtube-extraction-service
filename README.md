@@ -69,7 +69,9 @@ keeps running) with `docker compose stop cloudflared-quick`.
 No access key protects the service: anyone with the address can use it, within the per-IP
 rate limits. Share the link privately. Downloads run from your connection. Rate limits key on
 `CF-Connecting-IP` (`GT_CLIENT_IP_HEADER`), which Cloudflare sets and clients can't fake through
-the tunnel; a client that reaches port 8080 directly (your LAN) could still send it.
+the tunnel. Compose publishes port 8080 on this machine only (`127.0.0.1`), so other devices
+can't reach the service around the tunnel. If you open it to your network by changing that to
+`"8080:8080"`, clear `GT_CLIENT_IP_HEADER`, or those devices can fake the header.
 
 ## What it does (from the spec)
 
